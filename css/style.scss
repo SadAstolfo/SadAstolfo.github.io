@@ -1,3 +1,4 @@
+/*basic styles starts*/
 html {
 	background-color: #fff;
 	-webkit-font-smoothing: antialiased;
@@ -161,7 +162,7 @@ a:hover, a:active {
 		a.current{
 			color:#5A5A5A;
 			padding-bottom: 22px;
-			border-bottom: 1px solid #5A5A5A;
+			border-bottom: 1px solid #5A5A5A;	
 		}
 	}
 
@@ -178,12 +179,12 @@ a:hover, a:active {
 			height: 32px;
 			border-radius: 300px;
 			}
-		}
+		}	
 		.back_btn{
 			float: left;
 			padding-top: 5px;
 			margin-right:-10px;
-
+		
 		 li{
 			display: initial;
 			padding-right:40px;
@@ -558,7 +559,7 @@ a:hover, a:active {
 	padding: 9px;
 	}
 	a:hover{
-	color: #BD4226;
+	color: #BD4226;	
 	}
 }
 .twitter{
@@ -574,23 +575,13 @@ a:hover, a:active {
 		}
 		a:hover{
 			color:#4B9ECE;
-		}
+		}	
 }
 /* about */
 .about{
 	margin: 30px;
 	h3{
 		font-size: 22px;
-	}
-}
-/* links*/
-.links{
-	margin: 30px;
-	h3{
-		font-size: 22px;
-	}
-	a{
-		cursor: pointer;
 	}
 }
 /* 评论样式 */
@@ -739,10 +730,7 @@ a.btn {
 
 }
 
-.page_404{
-	text-align:center;
-	padding-top:50px;
-}
+
 @media screen and (max-width: 960px) {
 	.sidebar {
 		width: 100%;
@@ -751,7 +739,7 @@ a.btn {
 		z-index: 1;
 			.logo-title{
 				padding-top: 120px;
-
+			
 				.title{
 
 					img{
@@ -781,5 +769,7 @@ a.btn {
 	.share{
 		display: grid;
 	}
-
+	
 }
+
+
