@@ -1,0 +1,82 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta name="generator" content="Hexo 3.8.0"><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><meta name="author" content="Astolfo"><title>JVM认知（1）— JVM构成与运行时数据区构成 · Java技术博客</title><meta name="description" content="前言JVM内容，我会分为5个部分讲解
+
+
+JVM构成与运行时数据区
+Class Loader与GC
+Java内存模型与Java对象的内存分布
+JVM常见启动参数作用与分析
+Java虚拟机的监控与诊断工具
+
+
+本文章主要讲述JVM的整体构成，已经解析运行时数据区内部结构。
+
+Java虚拟机（JVM）
+"><meta name="keywords"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="renderer" content="webkit"><link rel="short icon" href="/images/favicon.png" type="image/x-icon"><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/blog_basic.css"><link rel="stylesheet" href="/css/font-awesome.min.css"><link rel="alternate" type="application/atom+xml" title="ATOM 1.0" href="/atom.xml"></head><body><div class="sidebar animated fadeInDown"><div class="logo-title"><div class="title"><img src="/images/logo@2x.png" style="width:127px;"><h3 title><a href="/">Java技术博客</a></h3></div></div><ul class="social-links"></ul><div class="footer"><a target="_blank" href="/"><span>Theme by </span></a><a href="https://www.caicai.me"> CaiCai </a><span>&</span><a href="https://github.com/Ben02/hexo-theme-Anatole"> Ben</a><div class="by_farbox"><a href="https://hexo.io/zh-cn/" target="_blank">Proudly published with Hexo&#65281;</a></div></div></div><div class="main"><div class="page-top animated fadeInDown"><div class="nav"><li><a href="/">首页</a></li><li><a href="/archives">归档</a></li></div><div class="information"><div class="back_btn"><li><a class="fa fa-chevron-left" onclick="window.history.go(-1)"> </a></li></div><div class="avatar"><img></div></div></div><div class="autopagerize_page_element"><div class="content"><div class="post-page"><div class="post animated fadeInDown"><div class="post-title"><h3><a>JVM认知（1）— JVM构成与运行时数据区构成</a></h3></div><div class="post-content"><h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>JVM内容，我会分为5个部分讲解</p>
+<blockquote>
+<ol>
+<li>JVM构成与运行时数据区</li>
+<li>Class Loader与GC</li>
+<li>Java内存模型与Java对象的内存分布</li>
+<li>JVM常见启动参数作用与分析</li>
+<li>Java虚拟机的监控与诊断工具</li>
+</ol>
+</blockquote>
+<p>本文章主要讲述JVM的整体构成，已经解析运行时数据区内部结构。</p>
+<hr>
+<h1 id="Java虚拟机（JVM）"><a href="#Java虚拟机（JVM）" class="headerlink" title="Java虚拟机（JVM）"></a>Java虚拟机（JVM）</h1><blockquote>
+<p>JVM即Java虚拟机，我们都知道Java最大的特点就是跨平台。实现Java跨平台的功能，正是JVM实现其特点。</p>
+</blockquote>
+<blockquote>
+<p>Java指令并不是直接能在底层硬件上执行，是需要编译成字节码（.class），JVM再将字节码解析成对应系统的机器码和执行指令。</p>
+</blockquote>
+<hr>
+<h2 id="JVM构成"><a href="#JVM构成" class="headerlink" title="JVM构成"></a><span style="color: #0000FF">JVM构成</span></h2><p>JVM整体分为5个部分：</p>
+<ul>
+<li>类加载器 （Class Loader）</li>
+<li>运行时数据区 （Runtime data area）</li>
+<li>指令执行系统 （Execution engine）</li>
+<li>本地接口组件 （Native interface）</li>
+<li>垃圾回收器 （Garbage Collection）</li>
+</ul>
+<p>JVM 结构图输出，如下图：<br><img src="http://39.108.107.202:12034/upload/2019/6/jvm%E6%9E%B6%E6%9E%84-cdd74b95dce447e1bac4572e491b07e6.png" alt="jvm架构"></p>
+<h2 id="运行时数据区构成-（Runtime-data-area）"><a href="#运行时数据区构成-（Runtime-data-area）" class="headerlink" title="运行时数据区构成 （Runtime data area）"></a><span style="color: #0000FF">运行时数据区构成 （Runtime data area）</span></h2><ul>
+<li>PC寄存器 （PC Register）</li>
+<li>虚拟机栈 （VM Stacks）</li>
+<li>堆空间（Heap）</li>
+<li>本地方法栈（Native Method Stack）</li>
+<li>方法区（Method Area）</li>
+</ul>
+<h3 id="PC寄存器"><a href="#PC寄存器" class="headerlink" title="- PC寄存器"></a>- PC寄存器</h3><blockquote>
+<p>PC寄存器的作用：相当于线程执行所需对应字节码的信号指示器。被native修饰的方法则不会存在PC寄存器中。在多线程下，每个线程都会有属于自己的PC，所有的PC都会存储在PC寄存器中。</p>
+</blockquote>
+<h3 id="Java虚拟机栈（VM-Stacks）"><a href="#Java虚拟机栈（VM-Stacks）" class="headerlink" title="- Java虚拟机栈（VM Stacks）"></a>- Java虚拟机栈（VM Stacks）</h3><blockquote>
+<p>线程都有属于自己的虚拟机栈，这个栈是同线程一同创建的，生命周期等同于线程。<strong><span style="color : #FF0000">VM Stacks存储的就是Java执行时的内存模型</span></strong>，在JVM中堆栈都是以帧位单位保持线程状态的，即<span style="color : #FF0000"><strong>栈帧</strong></span>（Stack Frame）。栈帧用于存储方法<span style="color : #FF0000">++局部变量表，操作数栈，动态连接，返回地址，额外信息++</span>。一个方法从调用到执行完毕，在JVM中等于虚拟机栈中从入栈到出栈的过程。</p>
+</blockquote>
+<p>这里还说明一些栈的内存形式有两种</p>
+<ol>
+<li>固定内存</li>
+<li>动态内存</li>
+</ol>
+<p>两种关于内存的错误StackOverflowError和OutOfMemonyError</p>
+<ul>
+<li>StackOverflowError：如果在程序执行中出现内存不足，这种错误发生在JVM虚拟机栈为<strong>固定内存</strong></li>
+<li>OutOfMemonyError：在<strong>动态内存</strong>的JVM虚拟机栈中，再尝试获取更多内存需求时，但没有可分配内存时，会出现这种错误</li>
+</ul>
+<h3 id="堆空间（Heap）"><a href="#堆空间（Heap）" class="headerlink" title="- 堆空间（Heap）"></a>- 堆空间（Heap）</h3><blockquote>
+<p>所有的线程都共享一块存储区域，在JVM启动时创建。这是用来存储对象实例和基本类型值的区域，也可以说Java中所有创建的对象内存空间都会堆空间分配。</p>
+</blockquote>
+<p>JVM将Heap分为两块</p>
+<ol>
+<li>新生代（New Generation）存储短暂，限制内存大小内（通过设置-XX: PretenureSizeThreshold）的对象</li>
+<li>老生代（Old Generation）存储多次未被GC回收成功的对象或者较大对象</li>
+</ol>
+<h4 id="小贴士"><a href="#小贴士" class="headerlink" title="小贴士"></a><span style="color : rgba(255,0,255,0.5)">小贴士</span></h4><blockquote>
+<p>JDK1.7之前，Heap中老生代中还分为终生代和永久代。<br>JDK1.8之后，Heap中永久代被移除，并且将运行时常量池（Runtime Constant Pool）加入Heap中。</p>
+</blockquote>
+<h3 id="本地方法栈（Native-Method-Stack）"><a href="#本地方法栈（Native-Method-Stack）" class="headerlink" title="- 本地方法栈（Native Method Stack）"></a>- 本地方法栈（Native Method Stack）</h3><blockquote>
+<p>用于支持JVM使用本地方法存在的栈。等同于Java虚拟机栈，只是作用于本地方法。</p>
+</blockquote>
+<h3 id="方法区（Method-Area）"><a href="#方法区（Method-Area）" class="headerlink" title="- 方法区（Method Area）"></a>- 方法区（Method Area）</h3><blockquote>
+<p>和Heap一样，方法区是所有线程共享的内存区域，存储每一个类的结构信息。</p>
+</blockquote>
+</div><div class="post-footer"><div class="meta"><div class="info"><i class="fa fa-sun-o"></i><span class="date">2019-06-13</span><i class="fa fa-tag"></i></div></div></div></div><div class="share"><div class="twitter"><a class="fa fa-twitter" href="http://twitter.com/home?status=,http://yoursite.com/2019/06/13/JVM构成/,Java技术博客,JVM认知（1）— JVM构成与运行时数据区构成,;"></a></div></div><div class="pagination"><ul class="clearfix"><li class="next pagbuttons"><a class="btn" role="navigation" href="/2019/06/11/redis/" title="Redis知识整理">下一篇</a></li></ul></div></div></div></div></div><script src="/js/jquery.js"></script><script src="/js/jquery-migrate-1.2.1.min.js"></script><script src="/js/jquery.appear.js"></script></body></html>
