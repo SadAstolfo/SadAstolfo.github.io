@@ -1,0 +1,230 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta name="generator" content="Hexo 3.8.0"><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><meta name="author" content="Astolfo"><title>JVM认知（2）— CLASS LOADER 与 GC · Java技术博客</title><meta name="description" content="前言JVM内容，我会分为5个部分讲解
+
+
+JVM构成与运行时数据区
+Class Loader与GC
+Java内存模型与Java对象的内存分布
+JVM常见启动参数作用与分析
+Java虚拟机的监控与诊断工具
+
+
+在上个章节中，我们已经介绍了JVM构成和运行时数据区构成本文章主要讲述JVM中Class L"><meta name="keywords"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="renderer" content="webkit"><link rel="short icon" href="/images/favicon.png" type="image/x-icon"><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/blog_basic.css"><link rel="stylesheet" href="/css/font-awesome.min.css"><link rel="alternate" type="application/atom+xml" title="ATOM 1.0" href="/atom.xml"></head><body><div class="sidebar animated fadeInDown"><div class="logo-title"><div class="title"><img src="/images/logo@2x.png" style="width:127px;"><h3 title><a href="/">Java技术博客</a></h3></div></div><ul class="social-links"></ul><div class="footer"><a target="_blank" href="/"><span>Theme by </span></a><a href="https://www.caicai.me"> CaiCai </a><span>&</span><a href="https://github.com/Ben02/hexo-theme-Anatole"> Ben</a><div class="by_farbox"><a href="https://hexo.io/zh-cn/" target="_blank">Proudly published with Hexo&#65281;</a></div></div></div><div class="main"><div class="page-top animated fadeInDown"><div class="nav"><li><a href="/">首页</a></li><li><a href="/archives">归档</a></li></div><div class="information"><div class="back_btn"><li><a class="fa fa-chevron-left" onclick="window.history.go(-1)"> </a></li></div><div class="avatar"><img></div></div></div><div class="autopagerize_page_element"><div class="content"><div class="post-page"><div class="post animated fadeInDown"><div class="post-title"><h3><a>JVM认知（2）— CLASS LOADER 与 GC</a></h3></div><div class="post-content"><h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>JVM内容，我会分为5个部分讲解</p>
+<blockquote>
+<ol>
+<li><a href="http://39.108.107.202:12034/archives/jvm1" target="_blank" rel="noopener">JVM构成与运行时数据区</a></li>
+<li><a href="http://39.108.107.202:12034/archives/jvm2" target="_blank" rel="noopener">Class Loader与GC</a></li>
+<li>Java内存模型与Java对象的内存分布</li>
+<li>JVM常见启动参数作用与分析</li>
+<li>Java虚拟机的监控与诊断工具</li>
+</ol>
+</blockquote>
+<p>在上个章节中，我们已经介绍了JVM构成和运行时数据区构成<br>本文章主要讲述JVM中Class Loader工作原理和JVM是如何处理垃圾回收的。</p>
+<hr>
+<h2 id="类加载器-（Class-Loader）"><a href="#类加载器-（Class-Loader）" class="headerlink" title="类加载器 （Class Loader）"></a><span style="color: #0000FF">类加载器 （Class Loader）</span></h2><p>Class Loader作用：java类文件加载到java虚拟机中，即装载.class文件</p>
+<p>Class Loader有两种装载class的方式</p>
+<blockquote>
+<ul>
+<li>隐式：运行过程中，碰到new方式生成对象时，隐式调用classLoader到JVM</li>
+<li>显式：通过Class.forName(classname)动态加载</li>
+</ul>
+</blockquote>
+<h3 id="Java类加载器类型"><a href="#Java类加载器类型" class="headerlink" title="Java类加载器类型"></a>Java类加载器类型</h3><ul>
+<li><p><span style="color: #FF0000">Bootstrap类加载器</span>（Bootstrap Class Loader）</p>
+<blockquote>
+<p>Bootstrap类加载器加载java的核心类，如java.lang，java.util等。这些类是java运行时环境的一部分。</p>
+</blockquote>
+</li>
+<li><p><span style="color: #FF0000">扩展类加载器</span>（Extensions Class Loader）</p>
+<blockquote>
+<p>JAVA_HOME/jre/ lib/ext包含jar包，它是标准核心java类的扩展。扩展类加载器从此ext文件夹加载类。</p>
+</blockquote>
+</li>
+<li><p><span style="color: #FF0000">系统类加载器</span>（System Class Loader）</p>
+<blockquote>
+<p>别名AppClassLoader，加载java类路径中可用的Java类，classpath所指定的位置的类或者是jar文档</p>
+</blockquote>
+</li>
+<li><p><span style="color: #FF0000">自定义加载器</span></p>
+<blockquote>
+<p>继承java.lang.ClassLoader，可以定制自定需求想符合的类加载器</p>
+</blockquote>
+</li>
+</ul>
+<p>这些类加载器之间具有层次关系，如下图：</p>
+<p><img src="http://39.108.107.202:12034/upload/2019/6/ClassLoader%E5%85%B3%E7%B3%BB%E5%9B%BE-a90b8699ea9d4a5c88dbe6af3e4cca33.png" alt="ClassLoader关系图"></p>
+<h3 id="CLass-Loader工作原理"><a href="#CLass-Loader工作原理" class="headerlink" title="CLass Loader工作原理"></a>CLass Loader工作原理</h3><p><img src="http://39.108.107.202:12034/upload/2019/6/ClassLoader%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86-6c2fd8d6ef9c4c97a4e6359bbf09c410.png" alt="ClassLoader工作原理"></p>
+<ul>
+<li><p>主动引用：常见的new、反射</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> org.demo</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">NewClass</span> </span>&#123;</span><br><span class="line">    <span class="keyword">static</span> &#123;</span><br><span class="line">        System.out.println(<span class="string">"NewClass static init"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">InitClass</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;  </span><br><span class="line">	<span class="comment">// 主动引用</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 当new NewClass会输出NewClass static init</span></span><br><span class="line">        <span class="keyword">new</span> NewClass();</span><br><span class="line">	<span class="comment">// 当Class.forName也会输出NewClass static init</span></span><br><span class="line">	Class.forName(<span class="string">"org.demo.NewClass"</span>);  </span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>被动引用：子类引用父类静态字段，常量调用</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 父类</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">ParentClass</span> </span>&#123;</span><br><span class="line">	<span class="keyword">static</span>&#123;</span><br><span class="line">		System.out.println(<span class="string">"ParentClass static init"</span>);</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 父类静态字段</span></span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span> a = <span class="number">1</span>;</span><br><span class="line">	<span class="comment">// 父类常量</span></span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String b = <span class="string">"helloword"</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 子类</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">ChildClass</span> <span class="keyword">extends</span> <span class="title">ParentClass</span> </span>&#123;</span><br><span class="line">	<span class="keyword">static</span>&#123;</span><br><span class="line">		System.out.println(<span class="string">"ChildClass static init"</span>);</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">InitClass</span> </span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		<span class="comment">// 被动引用</span></span><br><span class="line"></span><br><span class="line">		<span class="comment">// 输出ParentClass static init</span></span><br><span class="line">		<span class="comment">// 输出1</span></span><br><span class="line">		System.out.println(ChildClass.a);</span><br><span class="line">		<span class="comment">// 并未看到ChildClass static init，证明父类未调用初始化方法</span></span><br><span class="line"></span><br><span class="line">		<span class="comment">// 只会输出helloword</span></span><br><span class="line">		System.out.println(ChildClass.b);</span><br><span class="line">		<span class="comment">// 并未看到ParentClass/ChildClass static init，证明父子类皆未调用初始化方法</span></span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<h3 id="双亲委派模型（Parent-Delegation-Model）"><a href="#双亲委派模型（Parent-Delegation-Model）" class="headerlink" title="双亲委派模型（Parent Delegation Model）"></a>双亲委派模型（Parent Delegation Model）</h3><blockquote>
+<p>类的加载过程采用双亲委托机制，这种机制能更好的保证 Java 平台的安全。 该模型要求除了顶层的Bootstrap class loader启动类加载器外，<span style="color: #FF0000">++其余的类加载器都应当有自己的父类加载器。子类加载器和父类加载器不是以继承的关系来实现，而是通过组合关系来复用父加载器的代码++</span>。每个类加载器都有自己的命名空间（由该加载器及所有父类加载器所加载的类组成，在同一个命名空间中，不会出现类的完整名字（包括类的包名）相同的两个类；在不同的命名空间中，有可能会出现类的完整名字（包括类的包名）相同的两个类）。</p>
+</blockquote>
+<p>来看看Java中loadClass方法</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; loadClass(String name, <span class="keyword">boolean</span> resolve) <span class="keyword">throws</span> ClassNotFoundException &#123;</span><br><span class="line">    <span class="keyword">synchronized</span> (getClassLoadingLock(name)) &#123;</span><br><span class="line">        <span class="comment">// 检查是否已经被当前ClassLoader装载</span></span><br><span class="line">        Class&lt;?&gt; c = findLoadedClass(name);</span><br><span class="line">        <span class="keyword">if</span> (c == <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="keyword">long</span> t0 = System.nanoTime();</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="keyword">if</span> (parent != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="comment">// 如果没有被当前装载，则递归的到父加载器中装载、自底向上查找</span></span><br><span class="line">                    c = parent.loadClass(name, <span class="keyword">false</span>);</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="comment">// 加载器已经到顶，还没有找到只能到Bootstrap加载器中找</span></span><br><span class="line">                    <span class="comment">// 根据上面了解到Bootstrap加载器是Root，但是实现为系统层面的语言（C++），不可能放在Parent中</span></span><br><span class="line">                    <span class="comment">// Bootstrap下一层才是所有加载器的Root</span></span><br><span class="line">                    c = findBootstrapClassOrNull(name);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">catch</span> (ClassNotFoundException e) &#123;</span><br><span class="line">                <span class="comment">// 如果从非空父类加载器中找不到类，则引发ClassNotFoundException</span></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> (c == <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="comment">// 如果仍然找不到，则调用find class以查找类</span></span><br><span class="line">                <span class="keyword">long</span> t1 = System.nanoTime();</span><br><span class="line">                c = findClass(name);</span><br><span class="line">                <span class="comment">// 定义类加载器；记录统计相关状态信息</span></span><br><span class="line">                sun.misc.PerfCounter.getParentDelegationTime().addTime(t1 - t0);</span><br><span class="line">                sun.misc.PerfCounter.getFindClassTime().addElapsedTimeFrom(t1);</span><br><span class="line">                sun.misc.PerfCounter.getFindClasses().increment();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (resolve) &#123;</span><br><span class="line">            resolveClass(c);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> c;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>解读代码：</p>
+<ol>
+<li>当前 ClassLoader 首先从自己已经加载的类中查询是否此类已经加载，如果已经加载则直接返回原来已经加载的类。每个类加载器都有自己的加载缓存，当一个类被加载了以后就会放入缓存， 等下次加载的时候就可以直接返回了。</li>
+<li>当前 classLoader 的缓存中没有找到被加载的类的时候，委托父类加载器去加载，父类加载器采用同样的策略，首先查看自己的缓存，然后委托父类的父类去加载，一直到 bootstrap ClassLoader.</li>
+<li>当所有的父类加载器都没有加载的时候，再由当前的类加载器加载，并将其放入它自己的缓存中，以便下次有加载请求的时候直接返回。</li>
+</ol>
+<hr>
+<h2 id="Java-垃圾回收机制（Java-Garbage-Collection）（GC）"><a href="#Java-垃圾回收机制（Java-Garbage-Collection）（GC）" class="headerlink" title="Java 垃圾回收机制（Java Garbage Collection）（GC）"></a>Java 垃圾回收机制（Java Garbage Collection）（GC）</h2><ul>
+<li>在Java中，对象的内存空间的分配和取消分配由JVM以自动方式通过垃圾收集过程完成。与C语言不同，开发人员无需在Java中编写垃圾收集代码。这是使Java流行的许多功能之一，并帮助程序员编写更好的Java应用程序。</li>
+<li><strong>GC是后台的守护进程，是一个低优先级进程，根据内存的使用情况动态的调整他的优先级</strong>。因此它是在内存中低到一定限度时才会自动运行，从而实现对内存的回收。这就是垃圾回收的时间不确定的原因</li>
+</ul>
+<h3 id="GC工作原理"><a href="#GC工作原理" class="headerlink" title="GC工作原理"></a>GC工作原理</h3><blockquote>
+<p>Java垃圾回收是一个自动过程，用于管理程序使用的运行时内存。通过这样做，自动JVM减轻了程序员分配和释放程序中的内存资源的开销。System.gc()并且Runtime.gc()是请求JVM启动垃圾收集过程的钩子。即使这种请求机制为程序员提供了启动进程的机会，但是<span style="color: #742321"><strong>主动权在JVM</strong></span>上。它可以选择<span style="color: #742321"><strong>拒绝请求</strong></span>，因此<span style="color: #742321"><strong>无法保证这些调用将执行垃圾回收</strong></span>。</p>
+</blockquote>
+<ul>
+<li><p>Eden Space：创建实例时，它首先存储在年轻代堆内存区域的eden空间中。</p>
+</li>
+<li><p>Survivor Space（S0 and S1）：作为次要垃圾收集周期的一部分，Live对象（仍然被引用）从Eden Space移动到Survivor Space S0。类似地，垃圾收集器扫描S0并将实时实例移动到S1。Not Live对象（解除引用）标记为垃圾回收。根据垃圾收集器，选择标记的实例将在移动中从内存中删除，或者驱逐过程将在单独的过程中完成。</p>
+</li>
+<li><p>Old Generation：老生代是堆内存的第二个逻辑部分。当垃圾收集器执行次要GC循环时，仍然存在于Survivor Space S1中的实例将存入老生代。在Survivor Space S1中取消引用的对象标记为删除。</p>
+</li>
+<li><p>Major GC：对于Java垃圾收集过程，老生代是实例生命周期的最后一个阶段。主要GC是垃圾收集过程，它扫描堆内存的老生代部分。如果实例被解除引用，那么它们被标记为删除，如果不是，它们只会继续留在老生代。</p>
+</li>
+<li><p>Memory Fragmentation：从堆内存中删除实例后，该位置将变为空，并可用于将来分配实例。这些空白区域将在内存区域中分段。为了更快地分配实例，应对其进行碎片整理。根据垃圾收集器的选择，回收的内存区域将在移动中被压缩，或者将在GC的单独传递中完成</p>
+</li>
+</ul>
+<h3 id="GC垃圾收集器类型"><a href="#GC垃圾收集器类型" class="headerlink" title="GC垃圾收集器类型"></a>GC垃圾收集器类型</h3><ul>
+<li>串行GC （Serial GC）</li>
+</ul>
+<blockquote>
+<p>串行GC通过保存所有应用程序线程来工作 它专为<span style="color : #FF8708">单线程环境</span>而设计。它只使用一个线程进行垃圾收集。通过在执行垃圾回收时时暂停所有应用程序线程的方式可能不适合多服务器环境。它最适合简单的命令行程序。</p>
+<p>启用参数 -XX:+UseSerialGC<br><img src="http://39.108.107.202:12034/upload/2019/6/%E4%B8%B2%E8%A1%8CGC-396b9795dda14d22a7fdf2d03af94a03.png" alt="串行GC"></p>
+</blockquote>
+<ul>
+<li>并行GC（Parallel GC）</li>
+</ul>
+<blockquote>
+<p>JVM的默认GC。与串行GC不同，它使用<span style="color : #FF8708">多个线程</span>进行垃圾收集。与串行GC类似，这也会在执行垃圾收集时++暂停所有应用程序线程++。</p>
+<p>启用参数 -XX:+UseParallelGC<br><img src="http://39.108.107.202:12034/upload/2019/6/%E5%B9%B6%E8%A1%8CGC-b9f977c8988a4f288afb4f075434cea3.png" alt="并行GC"></p>
+</blockquote>
+<ul>
+<li>CMS GC</li>
+</ul>
+<blockquote>
+<p>全称：Concurrent Mark Sweep，CMS GC使用<span style="color : #FF8708">多个线程扫描堆内存以标记要删除的实例，然后扫描标记的实例</span>。
+与并行GC相比，CMS GC使用更多CPU来确保更好的应用程序吞吐量。可以分配更多的CPU以获得更好的性能，那么CMS GC是并行收集器的首选。<br>CMS GC仅在以下两种情况下保存所有应用程序线程</p>
+<blockquote>
+<ol>
+<li>在Old Generation中标记引用的对象。</li>
+<li>在执行垃圾收集时堆内存发生了变化。</li>
+</ol>
+</blockquote>
+<p>启用参数 -XX:+UseParNewGC<br><img src="http://39.108.107.202:12034/upload/2019/6/CMSGC-f6ae25b505c0431ba4f2ead4bdc3ac31.png" alt="CMSGC"></p>
+</blockquote>
+<ul>
+<li>G1 GC</li>
+</ul>
+<blockquote>
+<p>G1垃圾收集器用于大堆内存区域。它将堆内存分成区域并在其中并行地进行整合。G1也会在回收内存后<span style="color : #FF8708">立即压缩可用堆空间</span>。然而CMS GC在Stop the World（全局暂停）状态下压缩内存。<span style="color : #FF8708">G1收集器首先尽可能收集垃圾后分类，并且对根据分类区域进行优先级排序</span>。</p>
+<p>启用参数 -XX:+UseG1GC<br><img src="http://39.108.107.202:12034/upload/2019/6/G1GC-893864d4ab7848d29b475b9a2c1ebfb1.png" alt="G1GC">\</p>
+</blockquote>
+<h3 id="GC算法"><a href="#GC算法" class="headerlink" title="GC算法"></a>GC算法</h3><ol>
+<li><strong>引用计数法</strong>。标记引用数量，简单但<span style="color : #007700">速度很慢。不能处理循环引用的情况</span>。</li>
+<li><strong>根搜索算法</strong>。设立若干种根对象，当任何一个根对象到某一个对象均不可达时，则这个对象是可以被回收的，<span style="color : #007700">根据对象引用类型，不一定会全部回收</span>（如：强引用、软引用）。</li>
+<li><strong>停止-复制</strong>(stop and copy)。<span style="color : #007700">效率低，需要的空间大</span>，但<span style="color : #FF0000">不会产生碎片</span>。</li>
+<li><strong>标记-清除</strong> (mark and sweep)。<span style="color : #FF0000">速度较快，占用空间少</span>，标记清除后会<span style="color : #007700">产生大量的碎片</span>。</li>
+</ol>
+<p>JVM中将对象的引用分为了四种类型，不同的对象引用类型会造成GC采用不同的方法进行回收</p>
+<ol>
+<li><strong>强引用</strong>（Strong Reference）：默认情况下，对象采用的均为强引用 （GC不会回收）</li>
+<li><strong>软引用</strong>（Soft Reference）：软引用是Java中提供的一种比较适合于缓存场景的应用 （只有在内存不够用的情况下才会被GC）</li>
+<li><strong>弱引用</strong>（Weak Reference）：在GC时一定会被GC回收</li>
+<li><strong>虚引用</strong>（Phantom Reference）：在GC时一定会被GC回收</li>
+<li><blockquote>
+<p>关于Java对象的引用，后续会有单独详细的讲解，并且会结合Java内存模型以及Java对象模型一起讲解</p>
+</blockquote>
+</li>
+</ol>
+<h5 id="GC-JVM-参数"><a href="#GC-JVM-参数" class="headerlink" title="GC JVM 参数"></a>GC JVM 参数</h5><table>
+<thead>
+<tr>
+<th>参数Options</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>-XX:+UseSerialGC</td>
+<td>使用串行GC</td>
+</tr>
+<tr>
+<td>-XX:+UseParallelGC</td>
+<td>使用并行GC</td>
+</tr>
+<tr>
+<td>-XX:+UseConcMarkSweepGC</td>
+<td>使用CMSGC</td>
+</tr>
+<tr>
+<td>-XX:+ParallelCMSThreads</td>
+<td>配置CMS GC使用的线程数</td>
+</tr>
+<tr>
+<td>-XX:+UseG1GC</td>
+<td>使用G1 GC</td>
+</tr>
+<tr>
+<td>-Xms</td>
+<td>配置初始堆内存大小</td>
+</tr>
+<tr>
+<td>-Xmx</td>
+<td>配置最大堆内存大小</td>
+</tr>
+<tr>
+<td>-Xmn</td>
+<td>配置年轻代内存大小</td>
+</tr>
+<tr>
+<td>-XX:PermSize</td>
+<td>配置初始永久代大小</td>
+</tr>
+<tr>
+<td>-XX:MaxPermSize</td>
+<td>配置最大永久代大小</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><span style="color : rgba(255,0,255,0.5)">小贴士</span> : 1.8之后无永久代</p>
+</blockquote>
+<h3 id="finalize方法"><a href="#finalize方法" class="headerlink" title="finalize方法"></a>finalize方法</h3><blockquote>
+<p>在驱逐实例并回收内存空间之前，Java GC会调用相应实例的finalize方法，以便实例有机会释放它所拥有的任何资源。虽然可以保证在回收内存空间之前调用finalize方法，但是没有指定顺序或时间。多个实例之间的顺序不能预先确定，它们甚至可以并行发生。程序不能预先调整实例之间的顺序调用finalize方法来回收资源。</p>
+</blockquote>
+<ul>
+<li>在finalize过程中抛出的任何未捕获的异常都将被静默忽略，并取消该实例的最终操作。</li>
+<li>JVM规范没有讨论关于弱引用的垃圾收集以及关于它的明确声明。</li>
+<li>垃圾收集由守护线程完成。</li>
+</ul>
+<h3 id="关于Java中垃圾分类"><a href="#关于Java中垃圾分类" class="headerlink" title="关于Java中垃圾分类"></a>关于Java中垃圾分类</h3><blockquote>
+<p>了解Java中对象在某种情况会变成垃圾对象，这些对象会被GC回收</p>
+</blockquote>
+<ul>
+<li>所有<strong>线程都不能访问的对象</strong>，那么这种对象就会变为垃圾</li>
+<li><strong>对象应用被改变</strong></li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Object x=<span class="keyword">new</span> Object(); </span><br><span class="line">Object y=<span class="keyword">new</span> Object();</span><br><span class="line">x=y; <span class="comment">// x变为垃圾 </span></span><br><span class="line">x=y=<span class="keyword">null</span>; <span class="comment">// y变为垃圾</span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>超出作用域</strong></li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 括号结束后x将无法被引用，变为垃圾</span></span><br><span class="line"><span class="keyword">if</span> ( i == <span class="number">0</span> ) &#123;</span><br><span class="line">	Object x=<span class="keyword">new</span> Object();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>类的嵌套导致未释放</strong></li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">A</span> </span>&#123;</span><br><span class="line">	A a;</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">	A x = <span class="keyword">new</span> A(); <span class="comment">// 分配一个空间 </span></span><br><span class="line">	x.a = <span class="keyword">new</span> A(); <span class="comment">// 又分配了一个空间</span></span><br><span class="line">	x = <span class="keyword">null</span>; <span class="comment">// 将会产生两个垃圾</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>线程中正常的垃圾</strong></li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">A</span> <span class="keyword">implements</span> <span class="title">Runnable</span></span>&#123; </span><br><span class="line">	<span class="function"><span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">		<span class="comment">// 具体实现</span></span><br><span class="line">	&#125; </span><br><span class="line">&#125; </span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">	A x=<span class="keyword">new</span> A();</span><br><span class="line">	x.start();</span><br><span class="line">	<span class="comment">// 等线程执行完后object1才被认定为垃圾</span></span><br><span class="line">	x = <span class="keyword">null</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></div><div class="post-footer"><div class="meta"><div class="info"><i class="fa fa-sun-o"></i><span class="date">2019-06-22</span><i class="fa fa-tag"></i></div></div></div></div><div class="share"><div class="twitter"><a class="fa fa-twitter" href="http://twitter.com/home?status=,http://yoursite.com/2019/06/22/ClassLoader与GC/,Java技术博客,JVM认知（2）— CLASS LOADER 与 GC,;"></a></div></div><div class="pagination"><ul class="clearfix"><li class="next pagbuttons"><a class="btn" role="navigation" href="/2019/06/13/JVM构成/" title="JVM认知（1）— JVM构成与运行时数据区构成">下一篇</a></li></ul></div></div></div></div></div><script src="/js/jquery.js"></script><script src="/js/jquery-migrate-1.2.1.min.js"></script><script src="/js/jquery.appear.js"></script></body></html>
